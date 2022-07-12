@@ -1,6 +1,10 @@
 # TEyeD
 This is the repo that proccess the TEyeD public dataset
 
+## 
+pip install -r requirements.txt
+pip install tqdm
+conda install opencv
 
 ## Citation
 @article{ICML2021DS,

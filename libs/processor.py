@@ -17,9 +17,9 @@ class Processor():
             lines = f.readlines()
         self.num_frames = int(lines[-1].split(';')[0])
 
-        self.out_root = './processed/{}'.format(self.video_name.replace('.mp4', ''))
-        if not os.path.exists('./processed'):
-            os.mkdir('./processed')
+        self.out_root = '{}/processed/{}'.format(data_dir, self.video_name.replace('.mp4', ''))
+        if not os.path.exists('{}/processed'.format(data_dir)):
+            os.mkdir('{}/processed'.format(data_dir))
         if not os.path.exists(self.out_root):
             os.mkdir(self.out_root)
         self.info = defaultdict(dict)
