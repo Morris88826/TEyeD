@@ -14,8 +14,6 @@ if __name__ == "__main__":
     idx = 0
 
     config = {
-        "eye_ball": True,
-        "gaze_vec": True, 
         "iris_eli": True,
         "iris_lm_2D": True, 
         "lid_lm_2D": True,

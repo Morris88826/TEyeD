@@ -7,9 +7,6 @@ def visualize(image, info, config):
     plt.figure()
     ax = plt.gca()
     ax.imshow(image)
-
-    if config["eye_ball"]:
-        pass
     
     if info["validity_iris"]:
         if config["iris_eli"]:
