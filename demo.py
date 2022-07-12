@@ -4,7 +4,7 @@ from libs.visualize import visualize
 from PIL import Image
 
 def process(video_path, data_dir="./sample_data"):
-    processor = Processor(video_path, data_dir=data_dir, process_video=False)
+    processor = Processor(video_path, data_dir=data_dir, process_video=True)
     info, images_path = processor.get_data()
     return info, images_path
 
