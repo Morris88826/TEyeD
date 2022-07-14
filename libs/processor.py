@@ -5,13 +5,19 @@ from re import L
 import cv2
 import time
 import json
+import tqdm
 class Processor():
-    def __init__(self, video_path, data_dir="./sample_data", process_video=True) -> None:
+    def __init__(self, video_path, data_dir="./sample_data", process_video=True, target_width=None, target_height=None, target_fps=5) -> None:
         self.video_path = video_path
         self.video_name = video_path.split('/')[-1]
         self.annotations_path = sorted(glob.glob(data_dir+'/annotations/{}*.txt'.format(self.video_name)))
         self.data_dir = data_dir
         self.annotations_dir = self.data_dir + '/annotations'
+
+        self.target_width = target_width
+        self.target_height = target_height
+        self.target_fps = target_fps
+        self.scaling = None
 
         with open('{}/{}eye_ball.txt'.format(self.annotations_dir, self.video_name), 'r') as f:
             lines = f.readlines()
@@ -40,12 +46,12 @@ class Processor():
     def generate_info(self, process_video=True):
         if process_video:
             self.process_video()
+        
         for annotation_path in self.annotations_path:
             self.annotation_type = annotation_path.split('/')[-1].replace(self.video_name, '').replace('.txt', '')
             if self.annotation_type == "eye_ball":
                 self.process_eye_ball()
             elif self.annotation_type == "eye_movements":
-                # self.process_eye_movements()
                 pass
             elif self.annotation_type == "gaze_vec":
                 self.process_gaze_vec()
@@ -91,31 +97,48 @@ class Processor():
 
         vidcap = cv2.VideoCapture(self.video_path)
         self.fps = vidcap.get(cv2.CAP_PROP_FPS)
-        
-        success,image = vidcap.read()
-        count = 1
-        while success:
-            cv2.imwrite("{}/{:07d}.png".format(images_out_root, count), image)     # save frame as JPEG file      
-            try:
-                success, image = vidcap.read()
-                count += 1
-            except:
-                success = False
-        #print("Done.")
 
+        if self.fps > self.target_fps:
+            r = self.fps//self.target_fps
+        else:
+            r = 1
+        
+        num_frames = int(vidcap.get(cv2. CAP_PROP_FRAME_COUNT))
+        self.scaling = {}
+        for frame in tqdm.tqdm(range(num_frames)):
+            success, image = vidcap.read()
+
+            if success:
+                if self.target_width is not None and self.target_height is not None:
+                    scale = self.target_width/image.shape[1]
+                    self.scaling[frame+1] = scale
+                    image = cv2.resize(image, (int(scale*image.shape[1]), int(scale*image.shape[0])), interpolation=cv2.INTER_AREA)
+                else:
+                    self.scaling[frame+1] = 1
+
+                if(frame%r==0): 
+                    cv2.imwrite("{}/{:07d}.png".format(images_out_root, frame+1), image)     # save frame as JPEG file      
+            
     def process_eye_ball(self):
         #print("---------------------")
         #print("Processing Eye Ball ~")
+
+
         with open('{}/{}eye_ball.txt'.format(self.annotations_dir, self.video_name), 'r') as f:
             lines = f.readlines()
-        
+
         for l in lines[1:]:
             _info = l.split(';')
             frame_id = int(_info[0])
-            radius = float(_info[1])
-            x = float(_info[2])
-            y = float(_info[3])
-            z = float(_info[4])
+
+            scale = 1
+            if self.scaling is not None:
+                scale = self.scaling[frame_id]
+
+            radius = float(_info[1])*scale
+            x = float(_info[2])*scale
+            y = float(_info[3])*scale
+            z = float(_info[4])*scale
 
 
             self.info[frame_id]["eye_ball"] = {
@@ -142,9 +165,14 @@ class Processor():
         for l in lines[1:]:
             _info = l.split(';')
             frame_id = int(_info[0])
-            x = float(_info[1])
-            y = float(_info[2])
-            z = float(_info[3])
+
+            scale = 1
+            if self.scaling is not None:
+                scale = self.scaling[frame_id]
+
+            x = float(_info[1])*scale
+            y = float(_info[2])*scale
+            z = float(_info[3])*scale
 
             self.info[frame_id]["gaze_vec"] = {
                 "vector": [x,y,z]
@@ -163,11 +191,16 @@ class Processor():
         for l in lines[1:]:
             _info = l.split(';')
             frame_id = int(_info[0])
+
+            scale = 1
+            if self.scaling is not None:
+                scale = self.scaling[frame_id]
+
             angle = float(_info[1])
-            center_x = float(_info[2])
-            center_y = float(_info[3])
-            width = float(_info[4])
-            height = float(_info[5])
+            center_x = float(_info[2])*scale
+            center_y = float(_info[3])*scale
+            width = float(_info[4])*scale
+            height = float(_info[5])*scale
 
 
             self.info[frame_id]["iris_eli"] = {
@@ -181,19 +214,27 @@ class Processor():
     def process_iris_lm_2D(self):
         #print("---------------------")
         #print("Processing Iris Lm 2D ~")
-
-        with open('{}/{}iris_lm_2D.txt'.format(self.annotations_dir, self.video_name), 'r') as f:
-                    lines = f.readlines()
+        
+        try:
+            with open('{}/{}iris_lm_2D.txt'.format(self.annotations_dir, self.video_name), 'r') as f:
+                        lines = f.readlines()
+        except:
+            return 
 
         for l in lines[1:]:
             _info = l.split(';')
             frame_id = int(_info[0])
+
+            scale = 1
+            if self.scaling is not None:
+                scale = self.scaling[frame_id]
+
             _landmarks = _info[2:-1]
 
             landmarks = []
             for i in range(0, len(_landmarks), 2):
-                x = float(_landmarks[i])
-                y = float(_landmarks[i+1])
+                x = float(_landmarks[i])*scale
+                y = float(_landmarks[i+1])*scale
                 landmarks.append([x,y])
 
             self.info[frame_id]['iris_lm_2D'] = {
@@ -216,12 +257,16 @@ class Processor():
         for l in lines[1:]:
             _info = l.split(';')
             frame_id = int(_info[0])
+            scale = 1
+            if self.scaling is not None:
+                scale = self.scaling[frame_id]
+
             _landmarks = _info[2:-1]
 
             landmarks = []
             for i in range(0, len(_landmarks), 2):
-                x = float(_landmarks[i])
-                y = float(_landmarks[i+1])
+                x = float(_landmarks[i])*scale
+                y = float(_landmarks[i+1])*scale
                 landmarks.append([x,y])
 
             self.info[frame_id]['lid_lm_2D'] = {
@@ -244,11 +289,15 @@ class Processor():
         for l in lines[1:]:
             _info = l.split(';')
             frame_id = int(_info[0])
+            scale = 1
+            if self.scaling is not None:
+                scale = self.scaling[frame_id]
+
             angle = float(_info[1])
-            center_x = float(_info[2])
-            center_y = float(_info[3])
-            width = float(_info[4])
-            height = float(_info[5])
+            center_x = float(_info[2])*scale
+            center_y = float(_info[3])*scale
+            width = float(_info[4])*scale
+            height = float(_info[5])*scale
 
 
             self.info[frame_id]["pupil_eli"] = {
@@ -268,11 +317,15 @@ class Processor():
         for l in lines[1:]:
             _info = l.split(';')
             frame_id = int(_info[0])
+            scale = 1
+            if self.scaling is not None:
+                scale = self.scaling[frame_id]
+
             angle = float(_info[1])
-            center_x = float(_info[2])
-            center_y = float(_info[3])
-            width = float(_info[4])
-            height = float(_info[5])
+            center_x = float(_info[2])*scale
+            center_y = float(_info[3])*scale
+            width = float(_info[4])*scale
+            height = float(_info[5])*scale
 
 
             self.info[frame_id]["pupil_in_iris_eli"] = {
@@ -292,12 +345,16 @@ class Processor():
         for l in lines[1:]:
             _info = l.split(';')
             frame_id = int(_info[0])
+            scale = 1
+            if self.scaling is not None:
+                scale = self.scaling[frame_id]
+
             _landmarks = _info[2:-1]
 
             landmarks = []
             for i in range(0, len(_landmarks), 2):
-                x = float(_landmarks[i])
-                y = float(_landmarks[i+1])
+                x = float(_landmarks[i])*scale
+                y = float(_landmarks[i+1])*scale
                 landmarks.append([x,y])
 
             self.info[frame_id]['pupil_lm_2D'] = {
